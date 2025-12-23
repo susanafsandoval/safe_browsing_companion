@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = false;
 
   // TODO: Replace with your actual VirusTotal API key
-  final String apiKey = 'YOUR_API_KEY_HERE';
+  final String apiKey = 'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
 
   Future<void> checkUrlSafety() async {
     final String url = _urlController.text.trim();
@@ -35,7 +35,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://www.virustotal.com/api/v3/urls'),
+        Uri.parse('https://virustotal.com/api/v3/urls'),
         headers: {
           'x-apikey': apiKey,
           'Content-Type': 'application/x-www-form-urlencoded',

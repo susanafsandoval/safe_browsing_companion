@@ -5,7 +5,6 @@ import '../models/scan_result.dart';
 import '../services/history_service.dart';
 import 'history_screen.dart';
 
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -26,9 +25,14 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _riskColor = Colors.grey;
   String _riskMessage = '';
 
-  // ⚠️ Keep your API key as-is (we'll move it later)
+  // ⚠️ API key (move later)
   final String apiKey =
       'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
+
+  // 🔹 Encode URL for VT /urls/{id}
+  String encodeUrl(String url) {
+    return base64Url.encode(utf8.encode(url)).replaceAll('=', '');
+  }
 
   Future<void> checkUrl() async {
     setState(() {
@@ -49,6 +53,9 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
 
+    print('--- SUBMIT RESPONSE ---');
+    print(jsonDecode(submitResponse.body));
+
     if (submitResponse.statusCode != 200) {
       setState(() => _isLoading = false);
       return;
@@ -67,20 +74,43 @@ class _HomeScreenState extends State<HomeScreen> {
       headers: {'x-apikey': apiKey},
     );
 
+    const encoder = JsonEncoder.withIndent('  ');
+    print('--- FULL ANALYSIS RESPONSE ---');
+    print(encoder.convert(jsonDecode(analysisResponse.body)));
+
     final analysisData = jsonDecode(analysisResponse.body);
     final results =
         analysisData['data']['attributes']['results'] as Map;
 
+    print('--- ENGINE RESULTS ---');
+    print(results);
+
     int malicious = 0;
     int suspicious = 0;
 
+    // ✅ FIXED: count using CATEGORY (not result)
     results.forEach((_, value) {
-      if (value['result'] == 'malicious') malicious++;
-      if (value['result'] == 'suspicious') suspicious++;
+      if (value['category'] == 'malicious') malicious++;
+      if (value['category'] == 'suspicious') suspicious++;
     });
 
     final total = results.length;
     final detections = malicious + suspicious;
+
+    // 🔹 Fetch URL stats (official VT counts)
+    final encodedUrl = encodeUrl(_urlController.text.trim());
+    final urlInfoEndpoint =
+        Uri.parse('https://www.virustotal.com/api/v3/urls/$encodedUrl');
+
+    final urlInfoResponse = await http.get(
+      urlInfoEndpoint,
+      headers: {'x-apikey': apiKey},
+    );
+
+    final urlInfoData = jsonDecode(urlInfoResponse.body);
+
+    print('--- LAST ANALYSIS STATS ---');
+    print(urlInfoData['data']['attributes']['last_analysis_stats']);
 
     String risk;
     Color color;
@@ -102,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
           'Many security vendors flagged this URL as malicious. Avoid visiting.';
     }
 
-    // ✅ SAVE SCAN TO HISTORY (NEW)
+    // ✅ Save to history
     final scanResult = ScanResult(
       url: _urlController.text.trim(),
       malicious: malicious,

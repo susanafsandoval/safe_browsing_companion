@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../models/scan_result.dart';
+import '../services/history_service.dart';
+import 'history_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,8 +26,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Color _riskColor = Colors.grey;
   String _riskMessage = '';
 
-  // ⚠️ You already have this – keep yours
-  final String apiKey = 'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
+  // ⚠️ Keep your API key as-is (we'll move it later)
+  final String apiKey =
+      'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
 
   Future<void> checkUrl() async {
     setState(() {
@@ -31,8 +36,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _riskLevel = '';
     });
 
-    final submitUrl =
-        Uri.parse('https://www.virustotal.com/api/v3/urls');
+    final submitUrl = Uri.parse('https://www.virustotal.com/api/v3/urls');
 
     final submitResponse = await http.post(
       submitUrl,
@@ -53,8 +57,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final submitData = jsonDecode(submitResponse.body);
     final analysisId = submitData['data']['id'];
 
-    final analysisUrl = Uri.parse(
-        'https://www.virustotal.com/api/v3/analyses/$analysisId');
+    final analysisUrl =
+        Uri.parse('https://www.virustotal.com/api/v3/analyses/$analysisId');
 
     await Future.delayed(const Duration(seconds: 3));
 
@@ -97,6 +101,17 @@ class _HomeScreenState extends State<HomeScreen> {
       message =
           'Many security vendors flagged this URL as malicious. Avoid visiting.';
     }
+
+    // ✅ SAVE SCAN TO HISTORY (NEW)
+    final scanResult = ScanResult(
+      url: _urlController.text.trim(),
+      malicious: malicious,
+      suspicious: suspicious,
+      harmless: total - malicious - suspicious,
+      timestamp: DateTime.now(),
+    );
+
+    await HistoryService.saveScan(scanResult);
 
     setState(() {
       _maliciousCount = malicious;

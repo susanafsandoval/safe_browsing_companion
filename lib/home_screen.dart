@@ -15,9 +15,36 @@ class _HomeScreenState extends State<HomeScreen> {
   String _resultMessage = '';
   bool _isLoading = false;
 
-  // TODO: Replace with your actual VirusTotal API key
-  final String apiKey = 'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
+  // TODO: Move this out later (Day 13)
+  final String apiKey =
+      'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
 
+  /// -----------------------------
+  /// DAY 8: FETCH SCAN RESULTS
+  /// -----------------------------
+  Future<void> fetchScanResults(String analysisId) async {
+    final response = await http.get(
+      Uri.parse('https://www.virustotal.com/api/v3/analyses/$analysisId'),
+      headers: {
+        'x-apikey': apiKey,
+        'accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final decoded = jsonDecode(response.body);
+      print('SCAN RESULTS:');
+      print(decoded);
+    } else {
+      print('Failed to fetch scan results');
+      print('Status code: ${response.statusCode}');
+      print(response.body);
+    }
+  }
+
+  /// -----------------------------
+  /// DAY 7: SUBMIT URL
+  /// -----------------------------
   Future<void> checkUrlSafety() async {
     final String url = _urlController.text.trim();
 
@@ -35,7 +62,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('https://virustotal.com/api/v3/urls'),
+        Uri.parse('https://www.virustotal.com/api/v3/urls'),
         headers: {
           'x-apikey': apiKey,
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -47,11 +74,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final analysisId = data['data']['id'];
 
         setState(() {
           _resultMessage =
-              'URL submitted successfully.\nScan ID: ${data['data']['id']}';
+              'URL submitted successfully.\nScan ID: $analysisId';
         });
+
+        // 🔑 DAY 8 CALL — fetch analysis results
+        await fetchScanResults(analysisId);
       } else {
         setState(() {
           _resultMessage =

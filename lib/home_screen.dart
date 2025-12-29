@@ -12,110 +12,155 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _urlController = TextEditingController();
 
-  String _resultMessage = '';
   bool _isLoading = false;
 
-  // TODO: Move this out later (Day 13)
-  final String apiKey =
-      'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
+  int _maliciousCount = 0;
+  int _suspiciousCount = 0;
+  int _totalEngines = 0;
 
-  /// -----------------------------
-  /// DAY 8: FETCH SCAN RESULTS
-  /// -----------------------------
-  Future<void> fetchScanResults(String analysisId) async {
-    final response = await http.get(
-      Uri.parse('https://www.virustotal.com/api/v3/analyses/$analysisId'),
+  String _riskLevel = '';
+  Color _riskColor = Colors.grey;
+  String _riskMessage = '';
+
+  // ⚠️ You already have this – keep yours
+  final String apiKey = 'ceace96377fae9f0ccfdb40179bfc328ecabfa05df1cecb889badec873d06f8d';
+
+  Future<void> checkUrl() async {
+    setState(() {
+      _isLoading = true;
+      _riskLevel = '';
+    });
+
+    final submitUrl =
+        Uri.parse('https://www.virustotal.com/api/v3/urls');
+
+    final submitResponse = await http.post(
+      submitUrl,
       headers: {
         'x-apikey': apiKey,
-        'accept': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: {
+        'url': _urlController.text.trim(),
       },
     );
 
-    if (response.statusCode == 200) {
-      final decoded = jsonDecode(response.body);
-      print('SCAN RESULTS:');
-      print(decoded);
-    } else {
-      print('Failed to fetch scan results');
-      print('Status code: ${response.statusCode}');
-      print(response.body);
-    }
-  }
-
-  /// -----------------------------
-  /// DAY 7: SUBMIT URL
-  /// -----------------------------
-  Future<void> checkUrlSafety() async {
-    final String url = _urlController.text.trim();
-
-    if (url.isEmpty) {
-      setState(() {
-        _resultMessage = 'Please enter a URL.';
-      });
+    if (submitResponse.statusCode != 200) {
+      setState(() => _isLoading = false);
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _resultMessage = '';
+    final submitData = jsonDecode(submitResponse.body);
+    final analysisId = submitData['data']['id'];
+
+    final analysisUrl = Uri.parse(
+        'https://www.virustotal.com/api/v3/analyses/$analysisId');
+
+    await Future.delayed(const Duration(seconds: 3));
+
+    final analysisResponse = await http.get(
+      analysisUrl,
+      headers: {'x-apikey': apiKey},
+    );
+
+    final analysisData = jsonDecode(analysisResponse.body);
+    final results =
+        analysisData['data']['attributes']['results'] as Map;
+
+    int malicious = 0;
+    int suspicious = 0;
+
+    results.forEach((_, value) {
+      if (value['result'] == 'malicious') malicious++;
+      if (value['result'] == 'suspicious') suspicious++;
     });
 
-    try {
-      final response = await http.post(
-        Uri.parse('https://www.virustotal.com/api/v3/urls'),
-        headers: {
-          'x-apikey': apiKey,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: {
-          'url': url,
-        },
-      );
+    final total = results.length;
+    final detections = malicious + suspicious;
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final analysisId = data['data']['id'];
+    String risk;
+    Color color;
+    String message;
 
-        setState(() {
-          _resultMessage =
-              'URL submitted successfully.\nScan ID: $analysisId';
-        });
-
-        // 🔑 DAY 8 CALL — fetch analysis results
-        await fetchScanResults(analysisId);
-      } else {
-        setState(() {
-          _resultMessage =
-              'Failed to check URL. Status code: ${response.statusCode}';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _resultMessage = 'Error: $e';
-      });
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+    if (detections == 0) {
+      risk = 'Safe';
+      color = Colors.green;
+      message = 'No security vendors flagged this URL.';
+    } else if (detections <= 2) {
+      risk = 'Suspicious';
+      color = Colors.orange;
+      message =
+          'Some security vendors flagged this URL. Proceed with caution.';
+    } else {
+      risk = 'Dangerous';
+      color = Colors.red;
+      message =
+          'Many security vendors flagged this URL as malicious. Avoid visiting.';
     }
+
+    setState(() {
+      _maliciousCount = malicious;
+      _suspiciousCount = suspicious;
+      _totalEngines = total;
+      _riskLevel = risk;
+      _riskColor = color;
+      _riskMessage = message;
+      _isLoading = false;
+    });
   }
 
-  @override
-  void dispose() {
-    _urlController.dispose();
-    super.dispose();
+  Widget buildResultCard() {
+    if (_riskLevel.isEmpty) return const SizedBox();
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: _riskColor, width: 2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      margin: const EdgeInsets.only(top: 20),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.security, color: _riskColor),
+                const SizedBox(width: 8),
+                Text(
+                  'Risk Level: $_riskLevel',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _riskColor,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Detections: ${_maliciousCount + _suspiciousCount} / $_totalEngines',
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _riskMessage,
+              style: const TextStyle(fontSize: 14),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Safe Browsing Companion'),
-      ),
+      appBar: AppBar(title: const Text('Safe Browsing Companion')),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
               controller: _urlController,
@@ -123,20 +168,18 @@ class _HomeScreenState extends State<HomeScreen> {
                 labelText: 'Enter a URL',
                 border: OutlineInputBorder(),
               ),
-              keyboardType: TextInputType.url,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             ElevatedButton(
-              onPressed: _isLoading ? null : checkUrlSafety,
-              child: _isLoading
-                  ? const CircularProgressIndicator()
-                  : const Text('Check URL'),
+              onPressed: _isLoading ? null : checkUrl,
+              child: const Text('Check URL'),
             ),
-            const SizedBox(height: 24),
-            Text(
-              _resultMessage,
-              style: const TextStyle(fontSize: 16),
-            ),
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.only(top: 16),
+                child: CircularProgressIndicator(),
+              ),
+            buildResultCard(),
           ],
         ),
       ),
